@@ -6,7 +6,7 @@
 #define SPEED 100//80isgood
 #define OFFSET 0
 #define SENSOR_ACTIVATE_LEVEL 950
-#define FRONT_BUMPER 1000
+#define FRONT_BUMPER 800
 
 
 const byte PWMR = 3;  // PWM control (speed) for motor right
@@ -32,7 +32,7 @@ void setup() {
 
 void loop() {
   
-  int sensorR = analogRead(A5);fr
+  int sensorR = analogRead(A5);
   int sensorL = analogRead(A4);
 
   //printSensors(sensorL, sensorR);
@@ -86,18 +86,7 @@ int ping()
   if (duration > FRONT_BUMPER)
   {
     
-    Serial.println("TRIGGERED");
-    Serial.println("TRIGGERED");
-    Serial.println("         ");
-    Serial.println("         ");
-    Serial.println("         ");
-    Serial.println("         ");
-    Serial.println("         ");
-    Serial.println("         ");
-    Serial.println("         ");
-    Serial.println("         ");
-    Serial.println("TRIGGERED");
-    Serial.println("TRIGGERED");
+    Serial.println(duration);
     
   }
   return duration;
