@@ -121,10 +121,11 @@ int checkBottomSensors(){
 }
 
 void checkForBlock(){
-  int dist = pingAVG(10);
+  //int dist = pingAVG(10);
+  int dist = pingF();
   Serial.println(dist);
   updateAllSensors();
-  if ((dist < 120 && dist > 0) || checkSensorF(sensorFL) == 1 || checkSensorF(sensorFR) == 1) {
+  if ((dist < 170 && dist > 0) || checkSensorF(sensorFL) == 1 || checkSensorF(sensorFR) == 1) {
     
     Serial.println(dist);
     drive(MOTOR_L,REV,SPEED);
@@ -143,7 +144,7 @@ void checkForBlock(){
     
 
     //if(checkSensorF(sensorFL) == 1 && checkSensorF(sensorFR) == 1){
-    if((checkSensorF(sensorFL) == 1 && sensorFR < 930) || (checkSensorF(sensorFR) == 1 && sensorFL < 930)){
+    if((checkSensorF(sensorFL) == 1 && sensorFR < 970) || (checkSensorF(sensorFR) == 1 && sensorFL < 970)){
       //push to the edge
       Serial.println("Push to the edge");
       while(!checkBottomSensors()){
@@ -154,12 +155,12 @@ void checkForBlock(){
       drive(MOTOR_R,REV,SPEED);
       delay(100);
       stopALL();
-    }else if(dist < 120 && dist > 0 && sensorFL > 960 && sensorFR > 960){//only middle went off
+    }else if(dist < 170 && dist > 0 && sensorFL > 960 && sensorFR > 960){//only middle went off
       Serial.println("avoid growing mushroom");
       //reverse
       drive(MOTOR_L,REV,SPEED);
       drive(MOTOR_R,REV,SPEED);
-      delay(300);
+      delay(250);
       stopALL();
       delay(500);
       
@@ -175,7 +176,7 @@ void checkForBlock(){
       //reverse
       drive(MOTOR_L,REV,SPEED);
       drive(MOTOR_R,REV,SPEED);
-      delay(300);
+      delay(150);
       stopALL();
       delay(500);
     
@@ -264,8 +265,8 @@ int ping()
 
 int pingF()
 {
-  int distance;
-  int duration;
+  long distance;
+  long duration;
   digitalWrite(trigPinF, LOW);
   delayMicroseconds(2);
   
