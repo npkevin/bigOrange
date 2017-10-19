@@ -7,7 +7,7 @@
 #define SPEED 80//100isgood
 #define OFFSET 0
 #define SENSOR_ACTIVATE_LEVEL 950
-#define SENSOR_ACTIVATE_LEVEL_F 850
+#define SENSOR_ACTIVATE_LEVEL_F 800
 #define FRONT_BUMPER 800
 #define blockDistance 750
 
@@ -122,8 +122,10 @@ int checkBottomSensors(){
 
 void checkForBlock(){
   int dist = pingAVG(10);
+  Serial.println(dist);
   updateAllSensors();
-  if ((dist < 130 && dist > 0) || checkSensorF(sensorFL) == 1 || checkSensorF(sensorFR) == 1) {
+  if ((dist < 120 && dist > 0) || checkSensorF(sensorFL) == 1 || checkSensorF(sensorFR) == 1) {
+    
     Serial.println(dist);
     drive(MOTOR_L,REV,SPEED);
     drive(MOTOR_R,REV,SPEED);
@@ -131,14 +133,17 @@ void checkForBlock(){
     stopALL();
     delay(1000);
     updateAllSensors();
-    drive(MOTOR_L,REV,SPEED);
-    drive(MOTOR_R,REV,SPEED);
-    delay(300);
-    stopALL();
-    delay(1000);
+    //dist = pingAVG(10);
+    Serial.print("dist: ");
+    Serial.println(dist);
+    Serial.print("LEFT: ");
+    Serial.println(sensorFL);
+    Serial.print("RIGHT: ");
+    Serial.println(sensorFR);
     
 
-    if(checkSensorF(sensorFL) == 1 && checkSensorF(sensorFR) == 1){
+    //if(checkSensorF(sensorFL) == 1 && checkSensorF(sensorFR) == 1){
+    if((checkSensorF(sensorFL) == 1 && sensorFR < 930) || (checkSensorF(sensorFR) == 1 && sensorFL < 930)){
       //push to the edge
       Serial.println("Push to the edge");
       while(!checkBottomSensors()){
@@ -148,16 +153,48 @@ void checkForBlock(){
       drive(MOTOR_L,REV,SPEED);
       drive(MOTOR_R,REV,SPEED);
       delay(100);
-    }else{
-      //turn away
-      Serial.println("turning away from block");
-      drive(MOTOR_L,FWD,SPEED);
+      stopALL();
+    }else if(dist < 120 && dist > 0 && sensorFL > 960 && sensorFR > 960){//only middle went off
+      Serial.println("avoid growing mushroom");
+      //reverse
+      drive(MOTOR_L,REV,SPEED);
       drive(MOTOR_R,REV,SPEED);
+      delay(300);
+      stopALL();
+      delay(500);
+      
+      //turn left
+      drive(MOTOR_L,REV,SPEED);
+      drive(MOTOR_R,FWD,SPEED);
+      delay(800);
+      stopALL();
+      
+      
+    }else{
+      Serial.println("turning");
+      //reverse
+      drive(MOTOR_L,REV,SPEED);
+      drive(MOTOR_R,REV,SPEED);
+      delay(300);
+      stopALL();
+      delay(500);
+    
+      
+      if(checkSensorF(sensorFL) == 1){
+        //turn left
+        drive(MOTOR_L,REV,SPEED);
+        drive(MOTOR_R,FWD,SPEED);
+      }else{//turn right
+        drive(MOTOR_L,FWD,SPEED);
+        drive(MOTOR_R,REV,SPEED);
+      }
+      delay(150);
+      stopALL();
     }
     //??degrees want 180+-30?
-    delay(200);
+    
   }
-  stopALL();
+
 }
 
 int pingAVG(int sample) {
