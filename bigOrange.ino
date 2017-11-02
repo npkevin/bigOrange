@@ -92,20 +92,24 @@ void loop() {
     Serial.println("Found line!!");
     stopALL();
     driveFWD(SPEED/1.8);
-    delay(200);
-    updateAllSensors();
-    if(sensorF < 600){
-      stopALL();
-      Serial.println("Finding line!");
-      //turn right then left
-      time = millis();
-      long unsigned startTime = 0;
-      for (i=0;i<3;i++) {
-        updateAllSensors();
-        Serial.println(i);
-        int ret = findLine(300+300*i, 1.3, startTime);
-        if(ret ==1)
-          break;
+    delay(100);
+    if(!checkSensor(sensorR) || !checkSensor(sensorL)){
+      delay(100);
+    
+      updateAllSensors();
+      if(sensorF < 600){
+        stopALL();
+        Serial.println("Finding line!");
+        //turn right then left
+        time = millis();
+        long unsigned startTime = 0;
+        for (i=0;i<3;i++) {
+          updateAllSensors();
+          Serial.println(i);
+          int ret = findLine(300+300*i, 1.3, startTime);
+          if(ret ==1)
+            break;
+        }
       }
     }
   }
