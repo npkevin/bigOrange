@@ -4,17 +4,13 @@
 
 #define MOTOR_R 0
 #define MOTOR_L 1
-#define SPEED 80//100isgood
+#define SPEED 100//100isgood
 #define OFFSET 0
 #define SENSOR_ACTIVATE_LEVEL 950
-#define SENSOR_ACTIVATE_LEVEL_F 800
 #define FRONT_BUMPER 800
-#define blockDistance 750
 
 
-#define wiggleSPEED 70 //70
-#define wiggleTURN 250
-#define timeTillWiggle 250*1.3
+
 
 
 const byte PWMR = 3;  // PWM control (speed) for motor right
@@ -24,13 +20,10 @@ const byte DIRL = 13; // Direction control for motor B
 
 int sensorR;
 int sensorL;
-int sensorFR;
-int sensorFL;
+int sensorF;
 
-#define trigPin 9
-#define echoPin 8
-#define trigPinF 5
-#define echoPinF 4
+#define trigPin 5
+#define echoPin 4
 
 unsigned long time;
 
@@ -39,9 +32,7 @@ void setup() {
   setupArdumoto(); // Set all pins as outputs
   pinMode(trigPin, OUTPUT);
   pinMode(echoPin, INPUT);
-  pinMode(trigPinF, OUTPUT);
-  pinMode(echoPinF, INPUT);
-  time = millis();
+  
 }
 
 
@@ -54,20 +45,10 @@ void loop() {
   sensorL = analogRead(A4);
 
   //front sensors for block detection
-  sensorFR = analogRead(A2);
-  sensorFL = analogRead(A3);
+  sensorF = analogRead(A2);//a3 might be setup
 
-  //printSensors(sensorL, sensorR);
+  //printSensors(sensorL, sensorR, sensorF);
   //Serial.println(ping());
-
-  /*// TESTING FRONT SENSORS
-
-  printSensors(sensorFR,sensorFL);
-  delay(200);
-
-
-  
-  // TESTING FRONT SENSORS*/
 
   driveFWD(SPEED);
 
@@ -77,7 +58,7 @@ void loop() {
     driveREV(SPEED);
 
   //right sensor activated
-  } else if (checkSensor(sensorR) || (ping() > FRONT_BUMPER))
+  } else if (checkSensor(sensorR))
   {
     stopALL();
     drive(MOTOR_L,FWD,SPEED);
@@ -86,7 +67,7 @@ void loop() {
     delay(500+OFFSET);
 
   // left sensor
-  } else if (checkSensor(sensorL) || (ping() > FRONT_BUMPER))
+  } else if (checkSensor(sensorL))
   {
    stopALL();
    drive(MOTOR_R,FWD,SPEED);
@@ -94,19 +75,76 @@ void loop() {
    //??degrees  want 180+-30?
    delay(500+OFFSET);
   }
-  
 
-  //Time to wiggle
-  /*if (millis() - time > timeTillWiggle) 
-  {
-    wiggle(); // stops wihen block is found
-    time = millis();
+  
+  //avoid squid
+  /*if ((ping() < FRONT_BUMPER)) {
+    stopALL();
+    //turnaway //copied front above
+    drive(MOTOR_R,FWD,SPEED);
+    drive(MOTOR_L,REV,SPEED); 
+    //??degrees  want 180+-30?
+    delay(400+OFFSET);
   }*/
-  
-  checkForBlock();
-  
+  int i;
+  updateAllSensors();
+  if(sensorF > 700){
+    Serial.println("Found line!!");
+    stopALL();
+    driveFWD(SPEED/1.8);
+    delay(200);
+    updateAllSensors();
+    if(sensorF < 600){
+      stopALL();
+      Serial.println("Finding line!");
+      //turn right then left
+      time = millis();
+      long unsigned startTime = 0;
+      for (i=0;i<3;i++) {
+        updateAllSensors();
+        Serial.println(i);
+        int ret = findLine(300+300*i, 1.3, startTime);
+        if(ret ==1)
+          break;
+      }
+    }
+  }
   
 }
+
+//findline
+//return 1 if line found, 0 otherwise
+int findLine(int turntime, float x, long unsigned startTime) {
+  
+      while(sensorF < 600 && startTime<turntime){
+        updateAllSensors();
+        Serial.println("Turning right!");
+        //turnaway //copied front above
+        drive(MOTOR_R,REV,SPEED/x);
+        drive(MOTOR_L,FWD,SPEED/x); 
+        startTime = millis()-time;
+      }
+      stopALL();
+      if(sensorF < 600){
+        
+        long unsigned startTime = 0;
+        while(sensorF < 600 && startTime<turntime*2){
+          Serial.println("Turning left!");
+          updateAllSensors();
+          //turnaway //copied front above
+          drive(MOTOR_R,FWD,SPEED/x);
+          drive(MOTOR_L,REV,SPEED/x); 
+          startTime = millis()-time;
+        }
+        stopALL();
+      }
+      if (sensorF > 700){
+        return 1;
+      }else{
+        return 0;
+      }
+      
+    }
 
 //return 1 if off table
 int checkBottomSensors(){
@@ -120,124 +158,10 @@ int checkBottomSensors(){
   }
 }
 
-void checkForBlock(){
-  //int dist = pingAVG(10);
-  int dist = pingF();
-  Serial.println(dist);
-  updateAllSensors();
-  if ((dist < 170 && dist > 0) || checkSensorF(sensorFL) == 1 || checkSensorF(sensorFR) == 1) {
-    
-    Serial.println(dist);
-    drive(MOTOR_L,REV,SPEED);
-    drive(MOTOR_R,REV,SPEED);
-    delay(100);
-    stopALL();
-    delay(1000);
-    updateAllSensors();
-    //dist = pingAVG(10);
-    Serial.print("dist: ");
-    Serial.println(dist);
-    Serial.print("LEFT: ");
-    Serial.println(sensorFL);
-    Serial.print("RIGHT: ");
-    Serial.println(sensorFR);
-    
 
-    //if(checkSensorF(sensorFL) == 1 && checkSensorF(sensorFR) == 1){
-    if((checkSensorF(sensorFL) == 1 && sensorFR < 970) || (checkSensorF(sensorFR) == 1 && sensorFL < 970)){
-      //push to the edge
-      Serial.println("Push to the edge");
-      while(!checkBottomSensors()){
-        drive(MOTOR_L,FWD,SPEED);
-        drive(MOTOR_R,FWD,SPEED);
-      }
-      drive(MOTOR_L,REV,SPEED);
-      drive(MOTOR_R,REV,SPEED);
-      delay(100);
-      stopALL();
-    }else if(dist < 170 && dist > 0 && sensorFL > 960 && sensorFR > 960){//only middle went off
-      Serial.println("avoid growing mushroom");
-      //reverse
-      drive(MOTOR_L,REV,SPEED);
-      drive(MOTOR_R,REV,SPEED);
-      delay(250);
-      stopALL();
-      delay(500);
-      
-      //turn left
-      drive(MOTOR_L,REV,SPEED);
-      drive(MOTOR_R,FWD,SPEED);
-      delay(800);
-      stopALL();
-      
-      
-    }else{
-      Serial.println("turning");
-      //reverse
-      drive(MOTOR_L,REV,SPEED);
-      drive(MOTOR_R,REV,SPEED);
-      delay(150);
-      stopALL();
-      delay(500);
-    
-      
-      if(checkSensorF(sensorFL) == 1){
-        //turn left
-        drive(MOTOR_L,REV,SPEED);
-        drive(MOTOR_R,FWD,SPEED);
-      }else{//turn right
-        drive(MOTOR_L,FWD,SPEED);
-        drive(MOTOR_R,REV,SPEED);
-      }
-      delay(150);
-      stopALL();
-    }
-    //??degrees want 180+-30?
-    
-  }
 
-}
 
-int pingAVG(int sample) {
-  int total = 0;
-  int sampleSize = sample;
-  for (int i = 0; i < sampleSize; i++) {
-    total += pingF();
-  }
-  //Serial.println(total/sampleSize);
-  return total/sampleSize;
-}
 
-void wiggle()
-{
-  Serial.println("Wiggling");
-  stopALL();
-  drive(MOTOR_L,FWD,wiggleSPEED);
-  drive(MOTOR_R,REV,wiggleSPEED);
-  delay(wiggleTURN);
-  if (checkSensorF(sensorFL) == 1 || checkSensorF(sensorFR) == 1)
-  {
-    return;
-  }
-  
-  stopALL();
-  drive(MOTOR_R,FWD,wiggleSPEED);
-  drive(MOTOR_L,REV,wiggleSPEED); 
-  delay(wiggleTURN*2);
-  if (checkSensorF(sensorFL) == 1 || checkSensorF(sensorFR) == 1)
-  {
-    return;
-  }
-
-  
-  stopALL();
-  drive(MOTOR_L,FWD,wiggleSPEED);
-  drive(MOTOR_R,REV,wiggleSPEED);
-  delay(wiggleTURN);
-  
-  
-  return;
-}
 
 int ping()
 {
@@ -263,95 +187,16 @@ int ping()
   return duration;
 }
 
-int pingF()
-{
-  long distance;
-  long duration;
-  digitalWrite(trigPinF, LOW);
-  delayMicroseconds(2);
-  
-  // Sets the trigPin on HIGH state for 10 micro seconds
-  digitalWrite(trigPinF, HIGH);
-  delayMicroseconds(10);
-  digitalWrite(trigPinF, LOW);
-  // Reads the echoPin, returns the sound wave travel time in microseconds
-  duration = pulseIn(echoPinF, HIGH);
-  // Calculating the distance
-  distance= duration*0.034/2;
-  return duration;
-}
 
 
-int checkSensorF(int sensor)
-{
-  if(sensor < SENSOR_ACTIVATE_LEVEL_F)
-  {
-    return 1;
-  }
 
-  return 0;
-}
-
-void foundBlock()
-{
-  //Serial.println("Block FOUND");
-  //starts from the left
-  updateAllSensors();
-  if (checkSensorF(sensorFL) == 1)
-  {
-    Serial.println("Block found on the Left");
-    updateAllSensors();
-    while (sensorFL > blockDistance)
-    {
-      Serial.print("moving closer to block (left) ");
-      Serial.println(sensorFL);
-      driveFWD(SPEED/1.5);
-      
-      if (checkSensorF(sensorFR) == 1)
-      {
-        
-        while(checkSensor(sensorL) == 0 || checkSensor(sensorR) == 0)
-        {
-          Serial.println("Driving block off the edge");
-          driveFWD(SPEED);
-          updateAllSensors();
-        }      
-      }
-      updateAllSensors();
-    }
-    
-  }
-  // starts from the right
-  else if (checkSensorF(sensorFR) == 1) 
-  {
-    Serial.println("Block found on the Right");
-    updateAllSensors();
-    while (sensorFR  > blockDistance)
-    {
-      Serial.println("moving closer to block (right)");
-      driveFWD(SPEED/1.5);
-      if (checkSensorF(sensorFL) == 1)
-        {
-          while(checkSensor(sensorL) == 0 || checkSensor(sensorR) == 0)
-          {
-            Serial.println("Driving block off the edge");
-            driveFWD(SPEED);
-            updateAllSensors();
-          }
-        }
-        updateAllSensors();
-     }
-  }
-  return;
-}
 
 void updateAllSensors() {
   sensorR = analogRead(A5);
   sensorL = analogRead(A4);
 
-  //front sensors for block detection
-  sensorFR = analogRead(A2);
-  sensorFL = analogRead(A3);
+  //frontbottom
+  sensorF = analogRead(A2);
 }
 
 int checkSensor(int sensor)
@@ -376,7 +221,7 @@ void driveREV(int speed)
   drive(MOTOR_L,REV,speed);
 }
 
-void printSensors(int left, int right)
+void printSensors(int left, int right, int front)
 {
   
   
@@ -385,6 +230,9 @@ void printSensors(int left, int right)
   Serial.println();
   Serial.print("right: ");
   Serial.print(right);
+  Serial.println();
+  Serial.print("Front: ");
+  Serial.print(front);
   Serial.println("\n");
 }
 
