@@ -7,7 +7,7 @@
 #define SPEED 100//100isgood
 #define OFFSET 0
 #define SENSOR_ACTIVATE_LEVEL 950
-#define FRONT_BUMPER 800
+#define FRONT_BUMPER 1200
 
 
 
@@ -48,7 +48,7 @@ void loop() {
   sensorF = analogRead(A2);//a3 might be setup
 
   //printSensors(sensorL, sensorR, sensorF);
-  //Serial.println(ping());
+  Serial.println(ping());
 
   driveFWD(SPEED);
 
@@ -78,21 +78,21 @@ void loop() {
 
   
   //avoid squid
-  /*if ((ping() < FRONT_BUMPER)) {
+  if ((ping() < FRONT_BUMPER)) {
     stopALL();
     //turnaway //copied front above
     drive(MOTOR_R,FWD,SPEED);
     drive(MOTOR_L,REV,SPEED); 
     //??degrees  want 180+-30?
     delay(400+OFFSET);
-  }*/
+  }
   int i;
   updateAllSensors();
   if(sensorF > 700){
     Serial.println("Found line!!");
     stopALL();
     driveFWD(SPEED/1.8);
-    delay(100);
+    delay(140);
     if(!checkSensor(sensorR) || !checkSensor(sensorL)){
       delay(100);
     
@@ -101,12 +101,11 @@ void loop() {
         stopALL();
         Serial.println("Finding line!");
         //turn right then left
-        time = millis();
-        long unsigned startTime = 0;
+        
         for (i=0;i<3;i++) {
           updateAllSensors();
           Serial.println(i);
-          int ret = findLine(300+300*i, 1.3, startTime);
+          int ret = findLine(300+250*i, 1.3, i);
           if(ret ==1)
             break;
         }
@@ -118,9 +117,14 @@ void loop() {
 
 //findline
 //return 1 if line found, 0 otherwise
-int findLine(int turntime, float x, long unsigned startTime) {
-  
-      while(sensorF < 600 && startTime<turntime){
+int findLine(int turntime, float x, int i) {
+      long unsigned startTime = 0;
+      long unsigned time = millis();
+      int turnTime2 = turntime;
+      if(i > 0){
+        turnTime2 = turntime*1.6;
+      }
+      while(sensorF < 600 && startTime<turnTime2){
         updateAllSensors();
         Serial.println("Turning right!");
         //turnaway //copied front above
@@ -131,7 +135,8 @@ int findLine(int turntime, float x, long unsigned startTime) {
       stopALL();
       if(sensorF < 600){
         
-        long unsigned startTime = 0;
+        startTime = 0;
+        time = millis();
         while(sensorF < 600 && startTime<turntime*2){
           Serial.println("Turning left!");
           updateAllSensors();
