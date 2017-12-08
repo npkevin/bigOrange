@@ -1,212 +1,337 @@
+#include <stdint.h>
+#include <math.h>
+
+#include <I2C_16.h>
+#include <TMP006.h>
+
+#include <stdint.h>
+#include <math.h>
+#include <Wire.h>
+
+uint8_t sensor1 = 0x40; // I2C address of TMP006, can be 0x40-0x47
+uint16_t samples = TMP006_CFG_1SAMPLE; // # of samples per reading, can be 1/2/4/8/16
 
 #define REV 0
 #define FWD 1
 
 #define MOTOR_R 0
 #define MOTOR_L 1
-#define SPEED 100//100isgood
-#define OFFSET 0
+#define SPEED 80
+
+#define TURNDIST 1000
 #define SENSOR_ACTIVATE_LEVEL 950
-#define FRONT_BUMPER 1200
+#define FRONT_BUMPER 800
 
+#define SENSOR_LINE 800
 
-
-
+#define CANDLETEMP 27
+#define ultraDistance 12
 
 const byte PWMR = 3;  // PWM control (speed) for motor right
 const byte PWML = 11; // PWM control (speed) for motor left
 const byte DIRR = 12; // Direction control for motor A
 const byte DIRL = 13; // Direction control for motor B
 
-int sensorR;
-int sensorL;
-int sensorF;
+int speedLeft = SPEED;
+int speedRight = SPEED;
 
-#define trigPin 5
-#define echoPin 4
+int foundLine = 0;
 
-unsigned long time;
+int sensorLineR;
+int sensorLineL;
+
+
+struct UltraSonicSensor{
+  byte trigPin;
+  byte echoPin; 
+};
+
+const UltraSonicSensor ultraRight = {10,9};
+const UltraSonicSensor ultraLeft = {8,7};
+const UltraSonicSensor ultraFrontL = {6,5};
+const UltraSonicSensor ultraFrontR = {4,2};
+
+namespace{
+long getDistance(const UltraSonicSensor* s){
+  long cm, duration;
+  // The sensor is triggred by a HIGH pulse of 10 or more microseconds.
+  // Give a short LOW pulse beforehand to ensure a clean HIGH pulse:
+  digitalWrite(s->trigPin, LOW);
+  delayMicroseconds(5);
+  digitalWrite(s->trigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(s->trigPin, LOW);
+ 
+  // Read the signal from the sensor: a HIGH pulse whose
+  // duration is the time (in microseconds) from the sending
+  // of the ping to the reception of its echo off of an object.
+  pinMode(s->echoPin, INPUT);
+  duration = pulseIn(s->echoPin, HIGH);
+ 
+  // convert the time into a distance
+  cm = (duration/2) / 29.1;
+  
+  return cm;
+  
+}
+}
+
 
 void setup() {
   // put your setup code here, to run once:
   setupArdumoto(); // Set all pins as outputs
-  pinMode(trigPin, OUTPUT);
-  pinMode(echoPin, INPUT);
+  //getDistance(&ultraRight);
+  pinMode(ultraRight.trigPin, OUTPUT); // Sets the trigPin as an Output
+  pinMode(ultraRight.echoPin, INPUT);
   
+  pinMode(ultraLeft.trigPin, OUTPUT); // Sets the trigPin as an Output
+  pinMode(ultraLeft.echoPin, INPUT); 
+  
+  pinMode(ultraFrontL.trigPin, OUTPUT); // Sets the trigPin as an Output
+  pinMode(ultraFrontL.echoPin, INPUT);
+  
+  pinMode(ultraFrontR.trigPin, OUTPUT); // Sets the trigPin as an Output
+  pinMode(ultraFrontR.echoPin, INPUT); 
+  
+  //delay(1000);
+  delayWBuffer(1000);
 }
-
-
-
 
 
 void loop() {
   
-  sensorR = analogRead(A5);
-  sensorL = analogRead(A4);
-
-  //front sensors for block detection
-  sensorF = analogRead(A2);//a3 might be setup
-
-  //printSensors(sensorL, sensorR, sensorF);
-  Serial.println(ping());
-
-  driveFWD(SPEED);
-
-  //both sensors activated
-  if(checkSensor(sensorR) && checkSensor(sensorL))
-  {
-    driveREV(SPEED);
-
-  //right sensor activated
-  } else if (checkSensor(sensorR))
-  {
-    stopALL();
-    drive(MOTOR_L,FWD,SPEED);
-    drive(MOTOR_R,REV,SPEED);
-    //??degrees want 180+-30?
-    delay(500+OFFSET);
-
-  // left sensor
-  } else if (checkSensor(sensorL))
-  {
-   stopALL();
-   drive(MOTOR_R,FWD,SPEED);
-   drive(MOTOR_L,REV,SPEED); 
-   //??degrees  want 180+-30?
-   delay(500+OFFSET);
-  }
-
+  int sensorEdgeR = analogRead(A1);
+  int sensorEdgeL = analogRead(A0);
   
-  //avoid squid
-  if ((ping() < FRONT_BUMPER)) {
+  updateLineSensors();
+  
+  //printLineSensors(sensorLineL, sensorLineR);
+  
+  //printEdgeSensors(sensorEdgeL, sensorEdgeR);
+
+  driveFWD(speedRight, speedLeft);
+  checkEdges(sensorEdgeR, sensorEdgeL);
+ 
+  //candle code
+  //candleFound();
+  
+  if(!candleFound() && objectInfront()){
+    //turn right
     stopALL();
-    //turnaway //copied front above
-    drive(MOTOR_R,FWD,SPEED);
-    drive(MOTOR_L,REV,SPEED); 
-    //??degrees  want 180+-30?
-    delay(400+OFFSET);
-  }
-  int i;
-  updateAllSensors();
-  if(sensorF > 700){
-    Serial.println("Found line!!");
-    stopALL();
-    driveFWD(SPEED/1.8);
-    delay(140);
-    if(!checkSensor(sensorR) || !checkSensor(sensorL)){
-      delay(100);
-    
-      updateAllSensors();
-      if(sensorF < 600){
-        stopALL();
-        Serial.println("Finding line!");
-        //turn right then left
-        
-        for (i=0;i<3;i++) {
-          updateAllSensors();
-          Serial.println(i);
-          int ret = findLine(300+250*i, 1.3, i);
-          if(ret ==1)
-            break;
-        }
-      }
+    //delay(500);
+    delayWBuffer(500);
+    if(objectInfront()){ 
+      drive(MOTOR_L,FWD,SPEED*1.1);
+      drive(MOTOR_R,REV,SPEED);
+      //delay(TURNDIST);
+      delayWBuffer(TURNDIST);
     }
+    
   }
+  printLineSensors(sensorLineL, sensorLineR);
+  if(findLine(sensorLineR, sensorLineL) || foundLine){
+    //Serial.println(foundLine);
+    printLineSensors(sensorLineL, sensorLineR);
+    foundLine = 1;
+    followLine();//delay of 150 in the function
+  }
+}
+
+
+
+int candleInfront(){
+  if(Serial.available() > 0 ) {
+     
+    char x = Serial.read();
+    
+    while(!isdigit(x)){
+      //Serial.println(x);
+      x = Serial.read();
+    }
+    //Serial.println(x-'0');
+    return x - '0';
+  }
+  return 0;
+}
+
+int candleFound(){
+   
+  if(candleInfront()){
+     quickStopAll();
+     
+     int candleF = 0;
+     //keep checking for if candle is infront
+     while(candleInfront()){
+       Serial.println("candle found");
+       candleF = 1;
+     }
+    
+     if(candleF){
+       //delay(1000);
+       delayWBuffer(1000);
+     }
+     return 1;
+  }
+  return 0;
+}
+
+
+
+int objectInfront(){
+  long uFrontR = getDistance(&ultraFrontR);
+  long uFrontL = getDistance(&ultraFrontL);
+  long uRight = getDistance(&ultraRight);
+  long uLeft = getDistance(&ultraLeft);
+  
+  /*Serial.print(uLeft);
+  Serial.print(" ");
+  Serial.print(uFrontL);
+  Serial.print(" ");
+  Serial.print(uFrontR);
+  Serial.print(" ");
+  Serial.println(uRight);*/
+  
+  if((uFrontR < ultraDistance && uFrontR > 0)|| (uFrontL < ultraDistance && uFrontL > 0) || (uLeft != 3 && uLeft < ultraDistance && uLeft > 0) || (uRight < ultraDistance && uRight > 0)){
+    Serial.println("Object Detected");
+    return 1;
+  }
+  return 0;
   
 }
 
-//findline
-//return 1 if line found, 0 otherwise
-int findLine(int turntime, float x, int i) {
-      long unsigned startTime = 0;
-      long unsigned time = millis();
-      int turnTime2 = turntime;
-      if(i > 0){
-        turnTime2 = turntime*1.6;
-      }
-      while(sensorF < 600 && startTime<turnTime2){
-        updateAllSensors();
-        Serial.println("Turning right!");
-        //turnaway //copied front above
-        drive(MOTOR_R,REV,SPEED/x);
-        drive(MOTOR_L,FWD,SPEED/x); 
-        startTime = millis()-time;
+//return 1 if line is found
+int findLine(int sensorLineR, int sensorLineL){
+  if(sensorLineR > SENSOR_LINE || sensorLineL > SENSOR_LINE){
+    return 1;
+  }
+  return 0;
+}
+
+//try to follow the line
+void followLine(){
+  
+  // on the line
+  /*if(sensorLineR > SENSOR_LINE || sensorLineL > SENSOR_LINE){ 
+     driveFWD(speedRight, speedLeft);
+     delay(150);
+  }*/
+  //update sensor
+  updateLineSensors();
+  
+  //printLineSensors(sensorLineL, sensorLineR);
+  Serial.println(sensorLineR);
+  //if it is completly off the line
+  if(sensorLineR < SENSOR_LINE && sensorLineL < SENSOR_LINE){
+    //turn left and right to find line
+    long timer = millis();
+    while(!candleFound() && millis() - timer < 500 && sensorLineL < SENSOR_LINE && sensorLineR < SENSOR_LINE){
+     //turn left
+      //printLineSensors(sensorLineL, sensorLineR);
+      drive(MOTOR_R,FWD,SPEED);
+      drive(MOTOR_L,REV,SPEED);
+      //delay(100);
+      updateLineSensors();
+    }
+    //stopALL();
+    //delay(300);
+    //updateLineSensors();
+    //if sensor still havent found the line
+    if(sensorLineL < SENSOR_LINE && sensorLineR < SENSOR_LINE){
+      timer = millis();
+      while(!candleFound() && millis() - timer < 700*2 && sensorLineL < SENSOR_LINE && sensorLineR < SENSOR_LINE){//7
+        //turn right
+        drive(MOTOR_R,REV,SPEED);
+        drive(MOTOR_L,FWD,SPEED);
+        updateLineSensors();
       }
       stopALL();
-      if(sensorF < 600){
-        
-        startTime = 0;
-        time = millis();
-        while(sensorF < 600 && startTime<turntime*2){
-          Serial.println("Turning left!");
-          updateAllSensors();
-          //turnaway //copied front above
-          drive(MOTOR_R,FWD,SPEED/x);
-          drive(MOTOR_L,REV,SPEED/x); 
-          startTime = millis()-time;
-        }
-        stopALL();
-      }
-      if (sensorF > 700){
-        return 1;
+      if(sensorLineL < SENSOR_LINE && sensorLineR < SENSOR_LINE){
+        Serial.println("didn't find line");
+        foundLine = 0;
       }else{
-        return 0;
+         Serial.println("found line again!!!");
+      }
+    }else{
+      Serial.println("found line again!!!");
+    }
+    
+  //both sensors on the black line -> go straight
+  }else if(sensorLineR > SENSOR_LINE && sensorLineL > SENSOR_LINE){
+    speedRight = SPEED;
+    speedLeft = SPEED;
+  }else{
+      Serial.print("SensorR: ");
+      Serial.print(sensorLineR);
+      Serial.print("     ");
+      Serial.print("SensorL: ");
+      Serial.println(sensorLineL);
+    if(sensorLineR-sensorLineL > 70){
+      Serial.print("turning right slightly ");
+      
+      //stopALL();
+      //delay(200);
+      long timer = millis();
+      while(millis() - timer < 500 && sensorLineL < SENSOR_LINE && !candleFound()){
+        //turn right
+        drive(MOTOR_R,REV,SPEED);
+        drive(MOTOR_L,FWD,SPEED*1.1);
+        updateLineSensors();
       }
       
+      //turn right slightly
+      //speedRight = speedRight*0.9;
+      //speedLeft = SPEED;
+    }else if(sensorLineL-sensorLineR > 70){
+      Serial.print("turning left slightly ");
+      //stopALL();
+      //delay(200);
+      //turn left slightly
+      long timer = millis();
+      while(millis() - timer < 500 && sensorLineR < SENSOR_LINE && !candleFound()){
+        //turn left
+        drive(MOTOR_R,FWD,SPEED);
+        drive(MOTOR_L,REV,SPEED*1.1);
+        updateLineSensors();
+      }
     }
-
-//return 1 if off table
-int checkBottomSensors(){
-
-  updateAllSensors();
-  if (checkSensor(sensorR) || (ping() > FRONT_BUMPER) || checkSensor(sensorL))
-  {
-    return 1;
-  } else {
-    return 0;
   }
 }
 
 
-
-
-
-
-int ping()
-{
-  int distance;
-  int duration;
-  digitalWrite(trigPin, LOW);
-  delayMicroseconds(2);
+void checkEdges(int sensorEdgeR, int sensorEdgeL){
+  //both edge sensors activated
+  /*if(checkSensor(sensorEdgeR) && checkSensor(sensorEdgeL))
+  {
+    driveREV(SPEED);
+    delay(200);
+  //right edge sensor activated
+  } else*/ if (checkSensor(sensorEdgeL)){
+    //turn right
+    stopALL();
+    drive(MOTOR_L,FWD,SPEED*1.1);
+    drive(MOTOR_R,REV,SPEED);
+    //delay(TURNDIST);
+    delayWBuffer(TURNDIST);
+    
+  } else if (checkSensor(sensorEdgeR)){ //left edge sensor activated
+   //turn left
+   stopALL();
+   drive(MOTOR_R,FWD,SPEED);
+   drive(MOTOR_L,REV,SPEED*1.1);
+   //delay(TURNDIST);
+   delayWBuffer(TURNDIST);
+  }
   
-  // Sets the trigPin on HIGH state for 10 micro seconds
-  digitalWrite(trigPin, HIGH);
-  delayMicroseconds(10);
-  digitalWrite(trigPin, LOW);
-  // Reads the echoPin, returns the sound wave travel time in microseconds
-  duration = pulseIn(echoPin, HIGH);
-  // Calculating the distance
-  distance= duration*0.034/2;
-  if (duration > FRONT_BUMPER)
-  {
-    
-    //Serial.println(duration);
-    
+}
+
+void delayWBuffer(long time){
+  long m = millis();
+  while(millis()-m < time){
+    Serial.read();
   }
-  return duration;
+  
 }
 
-
-
-
-
-void updateAllSensors() {
-  sensorR = analogRead(A5);
-  sensorL = analogRead(A4);
-
-  //frontbottom
-  sensorF = analogRead(A2);
-}
 
 int checkSensor(int sensor)
 {
@@ -218,10 +343,15 @@ int checkSensor(int sensor)
   return 0;
 }
 
-void driveFWD(int speed)
+void updateLineSensors(){
+  sensorLineR = analogRead(A2);
+  sensorLineL = analogRead(A3);
+}
+
+void driveFWD(int right, int left)
 {
-  drive(MOTOR_R,FWD,speed);
-  drive(MOTOR_L,FWD,speed);
+  drive(MOTOR_R,FWD,right);
+  drive(MOTOR_L,FWD,left+8);//10% of 80 more was found to be straight
 }
 
 void driveREV(int speed)
@@ -230,18 +360,23 @@ void driveREV(int speed)
   drive(MOTOR_L,REV,speed);
 }
 
-void printSensors(int left, int right, int front)
+void printEdgeSensors(int left, int right)
 {
-  
-  
   Serial.print("left: ");
   Serial.print(left);
   Serial.println();
   Serial.print("right: ");
   Serial.print(right);
+  Serial.println("\n"); 
+}
+
+void printLineSensors(int left, int right)
+{
+  Serial.print("left: ");
+  Serial.print(left);
   Serial.println();
-  Serial.print("Front: ");
-  Serial.print(front);
+  Serial.print("right: ");
+  Serial.print(right);
   Serial.println("\n");
 }
 
@@ -259,6 +394,12 @@ void drive (byte motor, byte dir, byte spd)
   }  
 }
 
+void quickStopAll(){
+  driveREV(SPEED);
+  delay(30);
+  stopALL();
+}
+
 void stopALL()
 {
   stop(MOTOR_R);
@@ -269,8 +410,6 @@ void stop(byte motor)
 {
   drive(motor, 0, 0);
 }
-
-
 
 void setupArdumoto()
 {
