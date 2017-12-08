@@ -271,7 +271,7 @@ void followLine(){
       //stopALL();
       //delay(200);
       long timer = millis();
-      while(millis() - timer < 500 && sensorLineL < SENSOR_LINE && !candleFound()){
+      while(millis() - timer < 500 && sensorLineL < SENSOR_LINE){ //&& !candleFound()){
         //turn right
         drive(MOTOR_R,REV,SPEED);
         drive(MOTOR_L,FWD,SPEED*1.1);
@@ -287,7 +287,7 @@ void followLine(){
       //delay(200);
       //turn left slightly
       long timer = millis();
-      while(millis() - timer < 500 && sensorLineR < SENSOR_LINE && !candleFound()){
+      while(millis() - timer < 500 && sensorLineR < SENSOR_LINE){//&& !candleFound()){
         //turn left
         drive(MOTOR_R,FWD,SPEED);
         drive(MOTOR_L,REV,SPEED*1.1);
